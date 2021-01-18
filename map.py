@@ -26,10 +26,25 @@ class Map:
 
             self.arr.append(row)
 
-        self.terrains = [] # wumpus, pit
-        self.marks = [] # breeze, stench
-        self.addTerrain("wumpus", maxWumpus, "stench")
-        # self.addTerrain("pit", maxPit, "breeze")
+        self.terrains = [] # wumpus
+        self.marks = [] # stench
+        self.wumpusIndex = self.addTerrain("wumpus", maxWumpus, "stench")
+        self.addGold()
+    
+    def addGold(self):
+        self.arr = self.flatArr()
+
+        while True:
+            index = random.randint(2, self.col * self.row)
+
+            if not index in self.wumpusIndex:
+                self.arr[index].conditions.append("gold")
+                print("gold exist")
+                break
+            else:
+                continue
+        
+        self.arr = np.reshape(self.arr, (-1, self.col))
 
     def addTerrain(self, terrain, terrainMax, mark=None):
         self.terrains.append(terrain)
@@ -72,6 +87,8 @@ class Map:
 
                         if 0 <= (i - 1) < self.row:
                             self.arr[i - 1][j].conditions.append(mark)
+        
+        return terrainIndex
             
     def flatArr(self):
         newArr = []
@@ -96,6 +113,9 @@ class Map:
 
                 if "OK" in floor.conditions:
                     conditionsStr += "*"
+
+                if "gold" in floor.conditions:
+                    conditionsStr += "g"
                 
                 for legend in [*self.terrains, *self.marks]:
                     if legend in floor.conditions:
@@ -126,13 +146,26 @@ class Map:
         pitFloor = []
         legends = [*self.terrains, *self.marks]   
 
-        while not self.mapSolved():
+        while True:
             os.system('clear')
-            self.printMap()
+            self.printMap(True)
             time.sleep(0.5)
             print()
             okFlag = True
             currentFloor = self.arr[self.agentPosition[0]][self.agentPosition[1]]
+
+            if "Agent" in currentFloor.conditions and "wumpus" in currentFloor.conditions:
+                print("wumpus eat you, you die")
+                break
+            
+            if "Agent" in currentFloor.conditions and "pit" in currentFloor.conditions:
+                print("you fall to pit, you die")
+                break
+
+            if "Agent" in currentFloor.conditions and "gold" in currentFloor.conditions:
+                print("gold discovered, you win!")
+                break
+        
             row = currentFloor.getRow()
             col = currentFloor.getCol()
 
@@ -178,54 +211,44 @@ class Map:
                 
                 self.agentMovingForward(floorOnCheck.pop())
             else:
-                if "stench" in currentFloor.conditions:
-                    wumpusIsNear = []
+                def agentsActionTowardTerrain(terrain, mark, terrainArr): 
+                    terrainIsNear = []
                     if 0 <= col + 1 < self.col:
-                        wumpusIsNear.append([[row, col + 1] ,Symbol(f"wumpus({row},{col + 1})")])
+                        terrainIsNear.append([[row, col + 1] ,Symbol(f"{terrain}({row},{col + 1})")])
 
                     if 0 <= col - 1 < self.col:
-                        wumpusIsNear.append([[row, col - 1] ,Symbol(f"wumpus({row},{col - 1})")])
+                        terrainIsNear.append([[row, col - 1] ,Symbol(f"{terrain}({row},{col - 1})")])
 
                     if 0 <= row + 1 < self.row:
-                        wumpusIsNear.append([[row + 1, col] ,Symbol(f"wumpus({row + 1},{col})")])
+                        terrainIsNear.append([[row + 1, col] ,Symbol(f"{terrain}({row + 1},{col})")])
 
                     if 0 <= row - 1 < self.row:
-                        wumpusIsNear.append([[row - 1, col] ,Symbol(f"wumpus({row - 1},{col})")])
+                        terrainIsNear.append([[row - 1, col] ,Symbol(f"{terrain}({row - 1},{col})")])
 
-                    allWumpusSymbol = [wumpusStatus[1] for wumpusStatus in wumpusIsNear]
+                    allTerrainSymbol = [terrainStatus[1] for terrainStatus in terrainIsNear]
                     
                     knowledge.add(Implication(
-                        Symbol(f"stench{currentFloor.getStringPosition()}"),
-                        Or(*allWumpusSymbol)
+                        Symbol(f"{mark}{currentFloor.getStringPosition()}"),
+                        Or(*allTerrainSymbol)
                     ))
 
                     if (len(floorOnCheck) == 0):
-                        for wumpusStatus in wumpusIsNear:
-                            if model_check(knowledge, wumpusStatus[1]): #checking if wumpus nearby
-                                wumpusFloor.append(wumpusStatus[0])
+                        for terrainStatus in terrainIsNear:
+                            terrainRow = terrainStatus[0][0]
+                            terrainCol = terrainStatus[0][1]
+
+                            if model_check(knowledge, terrainStatus[1]): #checking if terrain nearby
+                                terrainArr.append(terrainStatus[0])
+                                knowledge.add(Symbol(f"{terrain}({terrainRow},{terrainCol})"))
                             else:
-                                floorOnCheck.append(wumpusStatus[0])
+                                floorOnCheck.append(terrainStatus[0])
+
                         self.agentMovingForward(floorOnCheck.pop())
                     else:
                         self.agentMovingForward(floorOnCheck.pop())
 
-         
-    def mapSolved(self):
-        arrOnCheck = self.flatArr()
-
-        for floor in arrOnCheck:
-            for terrain in self.terrains: #checking if terrain exist
-                if "Agent" in floor.conditions and terrain in floor.conditions:
-                    print(f"Agent Die because of {terrain}")
-                    return True
-
-                if terrain in floor.conditions and "OK" in floor.conditions:
-                    print("unexpected behaviour: " + terrain + " marked OK")
-                    return True
-                elif terrain in floor.conditions: 
-                    continue
-            
-            return False
+                if "stench" in currentFloor.conditions and "stench" in self.marks:
+                    agentsActionTowardTerrain("wumpus", "stench", wumpusFloor)
 
     def agentMovingForward(self, newPosition):
         row = newPosition[0]
