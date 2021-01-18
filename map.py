@@ -29,6 +29,7 @@ class Map:
         self.terrains = [] # wumpus
         self.marks = [] # stench
         self.wumpusIndex = self.addTerrain("wumpus", maxWumpus, "stench")
+        self.pitIndex = self.addTerrain("pit", maxWumpus, "breeze")
         self.addGold()
     
     def addGold(self):
@@ -249,6 +250,9 @@ class Map:
 
                 if "stench" in currentFloor.conditions and "stench" in self.marks:
                     agentsActionTowardTerrain("wumpus", "stench", wumpusFloor)
+
+                if "breeze" in currentFloor.conditions and "breeze" in self.marks:
+                    agentsActionTowardTerrain("pit", "breeze", wumpusFloor)
 
     def agentMovingForward(self, newPosition):
         row = newPosition[0]
